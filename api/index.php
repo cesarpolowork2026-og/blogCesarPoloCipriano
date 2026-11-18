@@ -127,9 +127,31 @@ $perfil = [
     ],
     'blog' => [
         // Imágenes referenciales de Unsplash (licencia libre), guardadas en public/
-        ['titulo' => 'Del notebook a producción: MLOps con MLflow y reentrenamiento automático', 'categoria' => 'MLOps',            'imagen' => '/blog-mlops.jpg'],
-        ['titulo' => 'Explicar un modelo de churn con SHAP para equipos de negocio',              'categoria' => 'Machine Learning', 'imagen' => '/blog-shap.jpg'],
-        ['titulo' => '¿Qué tan robusto es un sistema RAG frente al español informal?',            'categoria' => 'NLP / LLMs',       'imagen' => '/blog-rag.jpg'],
+        // El texto de cada artículo está en $articulos (abajo), con la misma clave 'slug'.
+        [
+            'slug'      => 'mlops-mlflow-reentrenamiento-automatico',
+            'titulo'    => 'Del notebook a producción: MLOps con MLflow y reentrenamiento automático',
+            'categoria' => 'MLOps',
+            'imagen'    => '/blog-mlops.jpg',
+            'fecha'     => '2026-11-18',
+            'resumen'   => 'Cómo construir un ciclo MLOps que versiona modelos, vigila el recall, reentrena solo y promueve al mejor modelo sin detener la API.',
+        ],
+        [
+            'slug'      => 'explicar-modelo-churn-shap-negocio',
+            'titulo'    => 'Explicar un modelo de churn con SHAP para equipos de negocio',
+            'categoria' => 'Machine Learning',
+            'imagen'    => '/blog-shap.jpg',
+            'fecha'     => '2026-11-18',
+            'resumen'   => 'Cómo convertir una probabilidad de fuga en razones claras y accionables que el área comercial entienda y en las que pueda confiar.',
+        ],
+        [
+            'slug'      => 'robustez-rag-espanol-informal',
+            'titulo'    => '¿Qué tan robusto es un sistema RAG frente al español informal?',
+            'categoria' => 'NLP / LLMs',
+            'imagen'    => '/blog-rag.jpg',
+            'fecha'     => '2026-11-18',
+            'resumen'   => 'Informalidad, errores ortográficos y regionalismos: dónde se rompe un RAG, cómo medirlo y qué estrategias lo hacen más robusto.',
+        ],
     ],
 ];
 
@@ -153,18 +175,242 @@ function icono(string $n): string {
     return '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($p[$n] ?? '') . '</svg>';
 }
 
+// ============================================================================
+//  ARTÍCULOS DEL BLOG — cada uno se publica en /blog/{slug}
+// ============================================================================
+$articulos = [];
+
+$articulos['mlops-mlflow-reentrenamiento-automatico'] = [
+    'cuerpo' => <<<'HTML'
+<p>Entrenar un buen modelo en un notebook es la parte fácil. Lo difícil empieza el día después de ponerlo en producción: los datos cambian, el comportamiento de los usuarios cambia y el modelo que ayer tenía un recall excelente hoy empieza a fallar sin que nadie lo note. MLOps es, en esencia, la disciplina de hacer que ese deterioro sea <strong>visible, medible y corregible</strong> de forma automática.</p>
+<p>En este artículo explico un ciclo MLOps práctico construido con MLflow: versionado de modelos, monitoreo de una métrica clave, reentrenamiento automático, comparación <em>champion/challenger</em> y recarga del modelo sin detener la API.</p>
+
+<h2>1. Todo experimento se registra</h2>
+<p>El primer principio es simple: si un modelo no está registrado, no existe. Cada entrenamiento debe dejar rastro de sus parámetros, métricas, datos usados y el artefacto final. MLflow lo resuelve con muy poco código, y servicios como DagsHub ofrecen un servidor de tracking remoto sin necesidad de montar infraestructura propia.</p>
+<pre><code>import mlflow
+import mlflow.xgboost
+from xgboost import XGBClassifier
+from sklearn.metrics import recall_score, f1_score
+
+mlflow.set_experiment("churn")
+
+with mlflow.start_run() as run:
+    params = {"max_depth": 5, "n_estimators": 400, "learning_rate": 0.05}
+    model = XGBClassifier(**params).fit(X_train, y_train)
+
+    y_pred = model.predict(X_val)
+    mlflow.log_params(params)
+    mlflow.log_metrics({
+        "recall": recall_score(y_val, y_pred),
+        "f1": f1_score(y_val, y_pred),
+    })
+    mlflow.xgboost.log_model(model, "model", registered_model_name="churn")</code></pre>
+<p>Con <code>registered_model_name</code>, cada ejecución crea una nueva versión en el <strong>Model Registry</strong>. Ese registro es la fuente de verdad: la API nunca carga un archivo suelto, siempre carga “la versión que hoy es campeona”.</p>
+
+<h2>2. Champion y challenger con alias</h2>
+<p>En lugar de mover archivos entre carpetas, uso <strong>alias</strong> del registro. El alias <code>champion</code> apunta a la versión que está sirviendo predicciones; cualquier versión nueva es un <code>challenger</code> hasta que demuestre ser mejor sobre el mismo conjunto de evaluación.</p>
+<pre><code>from mlflow import MlflowClient
+
+client = MlflowClient()
+
+def promover_si_mejora(nueva_version: str, metrica: str = "recall", margen: float = 0.01):
+    champion = client.get_model_version_by_alias("churn", "champion")
+    m_champion = client.get_run(champion.run_id).data.metrics[metrica]
+
+    challenger = client.get_model_version("churn", nueva_version)
+    m_challenger = client.get_run(challenger.run_id).data.metrics[metrica]
+
+    if m_challenger &gt;= m_champion + margen:
+        client.set_registered_model_alias("churn", "champion", nueva_version)
+        return True
+    return False</code></pre>
+<p>El <strong>margen</strong> evita promover modelos que solo son “mejores” por ruido estadístico. Y como la comparación se hace con datos recientes y con el mismo criterio, la decisión es reproducible y auditable.</p>
+
+<h2>3. Monitorear la métrica que le importa al negocio</h2>
+<p>En un problema de fuga de clientes, el error más caro suele ser no detectar a un cliente que se va. Por eso la métrica de vigilancia es el <strong>recall</strong>, no la exactitud. Cuando llegan las etiquetas reales (por ejemplo, quién canceló efectivamente al cierre del mes), se calcula el recall del modelo en producción y se compara contra un umbral.</p>
+<pre><code>UMBRAL_RECALL = 0.75
+
+def revisar_y_reentrenar(datos_recientes):
+    recall_actual = evaluar_champion(datos_recientes)
+    if recall_actual &lt; UMBRAL_RECALL:
+        version = entrenar_y_registrar(datos_recientes)   # nuevo challenger
+        promover_si_mejora(version)</code></pre>
+<p>Este disparador puede ejecutarse como tarea programada. Lo importante es que la decisión de reentrenar no depende de que alguien recuerde revisar un dashboard.</p>
+
+<h2>4. Recargar el modelo sin detener el servicio</h2>
+<p>La última pieza es que la API se entere del cambio. Si el servicio carga <code>models:/churn@champion</code>, basta con volver a resolver el alias para obtener la nueva versión. En FastAPI se puede exponer un endpoint interno de recarga o revisar periódicamente si el alias cambió:</p>
+<pre><code>import mlflow.pyfunc
+from fastapi import FastAPI
+
+app = FastAPI()
+estado = {"modelo": mlflow.pyfunc.load_model("models:/churn@champion")}
+
+@app.post("/internal/reload")
+def recargar():
+    nuevo = mlflow.pyfunc.load_model("models:/churn@champion")
+    estado["modelo"] = nuevo          # reemplazo atómico de la referencia
+    return {"status": "ok"}
+
+@app.post("/predict")
+def predecir(cliente: dict):
+    return {"churn": float(estado["modelo"].predict([cliente])[0])}</code></pre>
+<p>El modelo nuevo se carga completo en memoria <em>antes</em> de reemplazar la referencia, así que las peticiones en curso siguen usando el modelo anterior y ninguna falla durante el cambio.</p>
+
+<h2>Lo que me llevo</h2>
+<ul>
+  <li><strong>El registro de modelos es el contrato</strong> entre ciencia de datos e ingeniería: la API solo conoce un alias.</li>
+  <li><strong>Monitorea la métrica de negocio</strong>, no la que se ve bonita en el reporte.</li>
+  <li><strong>Automatiza la decisión, no solo el entrenamiento</strong>: champion/challenger con un margen explícito.</li>
+  <li><strong>Despliega sin downtime</strong>: carga primero, reemplaza después.</li>
+</ul>
+<p>Con estas cuatro piezas, un modelo deja de ser un experimento y se convierte en un producto que se mantiene sano por sí mismo.</p>
+HTML,
+];
+
+$articulos['explicar-modelo-churn-shap-negocio'] = [
+    'cuerpo' => <<<'HTML'
+<p>Un modelo de fuga de clientes puede tener un AUC excelente y, aun así, no servir para nada si el equipo comercial no confía en él. La pregunta que siempre llega es la misma: <em>“¿por qué el modelo dice que este cliente se va a ir?”</em>. SHAP es la herramienta que uso para responderla de forma rigurosa y, sobre todo, comprensible.</p>
+
+<h2>Qué es SHAP en una frase</h2>
+<p>SHAP (<em>SHapley Additive exPlanations</em>) reparte la predicción de un modelo entre sus variables, de modo que la suma de las contribuciones más un valor base da exactamente la predicción. Viene de la teoría de juegos: cada variable es un “jugador” y SHAP calcula cuánto aportó cada una al resultado.</p>
+<p>Para modelos de árboles como XGBoost o Random Forest, <code>TreeExplainer</code> calcula estos valores de forma exacta y rápida, lo que permite explicar miles de clientes en segundos.</p>
+<pre><code>import shap
+
+explainer = shap.TreeExplainer(modelo)
+valores = explainer(X_clientes)        # un objeto Explanation por cliente
+
+# Explicación global: qué variables pesan más en todo el portafolio
+shap.plots.beeswarm(valores)
+
+# Explicación local: por qué ESTE cliente tiene riesgo alto
+shap.plots.waterfall(valores[42])</code></pre>
+
+<h2>Dos niveles de explicación</h2>
+<p><strong>Global</strong>: ¿qué factores impulsan la fuga en general? El gráfico <em>beeswarm</em> muestra, por ejemplo, si la antigüedad, el número de productos contratados o la actividad reciente son los factores dominantes. Esto le sirve a la gerencia para definir estrategia.</p>
+<p><strong>Local</strong>: ¿por qué este cliente en particular? El gráfico <em>waterfall</em> parte del riesgo promedio y muestra cómo cada variable lo sube o lo baja. Esto le sirve al ejecutivo que va a llamar al cliente mañana.</p>
+
+<h2>Traducir valores SHAP a lenguaje de negocio</h2>
+<p>Un gerente no necesita ver “<code>Balance: +0.37</code>”. Necesita una frase. Por eso, al servir las explicaciones desde una API, transformo las contribuciones principales en texto:</p>
+<pre><code>def explicar_cliente(idx, top=3):
+    v = valores[idx]
+    orden = abs(v.values).argsort()[::-1][:top]
+    razones = []
+    for i in orden:
+        nombre = NOMBRES_NEGOCIO[v.feature_names[i]]
+        sentido = "aumenta" if v.values[i] &gt; 0 else "reduce"
+        razones.append(f"{nombre} {sentido} el riesgo de fuga")
+    return razones
+
+# ["Tener un solo producto contratado aumenta el riesgo de fuga",
+#  "La inactividad en los últimos meses aumenta el riesgo de fuga",
+#  "La antigüedad del cliente reduce el riesgo de fuga"]</code></pre>
+<p>El diccionario <code>NOMBRES_NEGOCIO</code> es pequeño pero crucial: convierte nombres técnicos de columnas en conceptos que el área comercial reconoce.</p>
+
+<h2>De la explicación a la acción</h2>
+<p>La explicación más útil es la que sugiere qué hacer. Si el principal factor de riesgo de un cliente es tener un único producto, la acción natural es una oferta de venta cruzada; si es la inactividad, una campaña de reactivación. Agrupar a los clientes por su razón principal de riesgo permite diseñar <strong>campañas de retención segmentadas</strong> en lugar de un mensaje genérico para todos.</p>
+
+<h2>Precauciones que siempre comunico</h2>
+<ul>
+  <li><strong>SHAP explica el modelo, no la realidad.</strong> Indica qué variables usa el modelo para decidir, no que esas variables <em>causen</em> la fuga.</li>
+  <li><strong>Las variables correlacionadas se reparten el crédito.</strong> Si dos variables dicen casi lo mismo, su importancia puede verse diluida entre ambas.</li>
+  <li><strong>Una explicación no corrige un mal modelo.</strong> Si los datos tienen sesgos, SHAP los hará visibles, que es justamente parte de su valor.</li>
+</ul>
+
+<h2>Conclusión</h2>
+<p>La explicabilidad no es un adorno académico: es lo que convierte una probabilidad en una conversación con el cliente. Con SHAP, cada predicción viene acompañada de sus razones, y eso es lo que hace que un modelo pase de ser una caja negra a una herramienta de trabajo diaria.</p>
+HTML,
+];
+
+$articulos['robustez-rag-espanol-informal'] = [
+    'cuerpo' => <<<'HTML'
+<p>Los sistemas RAG (<em>Retrieval-Augmented Generation</em>) se evalúan casi siempre con preguntas bien escritas. Pero los usuarios reales no escriben así. Escriben <em>“q requisitos piden pa sacar mi credito”</em>, usan expresiones locales y cometen errores de tipeo. La pregunta que motiva mi tesis es directa: <strong>¿cuánto se degrada un sistema RAG cuando la consulta está en español informal?</strong></p>
+
+<h2>Cómo funciona un RAG y dónde puede romperse</h2>
+<p>Un sistema RAG tiene dos etapas. Primero, un <strong>recuperador</strong> convierte la pregunta en un vector (<em>embedding</em>) y busca los fragmentos de documentos más parecidos. Después, un <strong>generador</strong> (un LLM) redacta la respuesta usando esos fragmentos como contexto.</p>
+<p>La variación lingüística puede afectar a las dos etapas, pero el punto más frágil suele ser el recuperador: si la consulta informal produce un embedding alejado del documento correcto, el LLM nunca recibe la información que necesita, y ningún generador, por bueno que sea, puede responder bien sin el contexto adecuado.</p>
+
+<h2>Tres tipos de variación</h2>
+<ul>
+  <li><strong>Informalidad:</strong> abreviaturas y registro coloquial (“q”, “pa”, “xq”, “porfa”), omisión de tildes y signos de puntuación.</li>
+  <li><strong>Errores ortográficos:</strong> letras cambiadas, omitidas o duplicadas, confusiones como b/v, s/c/z o ll/y.</li>
+  <li><strong>Regionalismos:</strong> palabras propias de un país o región que no aparecen en los documentos formales; por ejemplo, “chamba” por <em>trabajo</em> en Perú.</li>
+</ul>
+
+<h2>Cómo medir la robustez</h2>
+<p>La idea es comparar el mismo sistema con dos versiones de cada pregunta: la formal y su variante perturbada. Para que la comparación sea justa, ambas deben tener la misma respuesta correcta.</p>
+<pre><code>def perturbar(texto: str) -&gt; dict:
+    return {
+        "formal":     texto,
+        "informal":   a_registro_informal(texto),    # abreviaturas, sin tildes
+        "ortografia": inyectar_errores(texto, p=0.08),
+        "regional":   sustituir_regionalismos(texto),
+    }
+
+def recall_at_k(recuperador, consultas, k=5):
+    aciertos = sum(doc_correcto in recuperador.buscar(q, k) for q, doc_correcto in consultas)
+    return aciertos / len(consultas)</code></pre>
+<p>Las métricas que conviene seguir son:</p>
+<ul>
+  <li><strong>Recall@k y MRR</strong> para el recuperador: ¿aparece el documento correcto entre los primeros resultados y en qué posición?</li>
+  <li><strong>Fidelidad y exactitud de la respuesta</strong> para el generador: ¿la respuesta se apoya en el contexto y es correcta?</li>
+  <li><strong>Caída relativa</strong> entre la versión formal y cada tipo de perturbación, que es el indicador directo de robustez.</li>
+</ul>
+
+<h2>Estrategias para hacerlo más robusto</h2>
+<ul>
+  <li><strong>Normalizar o reescribir la consulta</strong> antes de buscar: un LLM o un corrector puede convertir “q requisitos piden pa sacar mi credito” en una pregunta formal.</li>
+  <li><strong>Búsqueda híbrida:</strong> combinar BM25 (léxica) con búsqueda densa (semántica), ya que cada una falla ante tipos distintos de variación.</li>
+  <li><strong>Modelos entrenados en español</strong>, como BETO y sus variantes, o embeddings multilingües que hayan visto texto informal.</li>
+  <li><strong>Aumentar los datos de ajuste</strong> con consultas perturbadas, para que el recuperador aprenda que ambas formas significan lo mismo.</li>
+</ul>
+
+<h2>Por qué importa</h2>
+<p>Hay cerca de 500 millones de hablantes nativos de español, con enormes diferencias entre países y registros. Si los asistentes basados en RAG solo funcionan bien con español “de manual”, quienes escriben de forma más coloquial reciben peores respuestas. Medir y mejorar la robustez no es solo una cuestión técnica: es una condición para que estas herramientas sean útiles para todos.</p>
+<p>En próximos artículos compartiré cómo construyo el conjunto de evaluación y qué aprendí comparando distintas estrategias.</p>
+HTML,
+];
+
+// Metadatos del blog: se combinan con los títulos/categorías/imágenes de $perfil['blog']
+foreach ($perfil['blog'] as $b) {
+    $articulos[$b['slug']] += $b;
+    $articulos[$b['slug']]['minutos'] = max(1, (int) ceil(str_word_count(strip_tags($articulos[$b['slug']]['cuerpo'])) / 200));
+}
+
+// --- Enrutamiento: /blog/{slug} muestra un artículo; el resto, la portada.
+$ruta = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/');
+$articulo = null;
+if (preg_match('#^/blog(?:/([a-z0-9-]+))?$#', $ruta, $m)) {
+    if (!empty($m[1]) && isset($articulos[$m[1]])) {
+        $articulo = $articulos[$m[1]];
+    } else {
+        header('Location: /#blog', true, 302);
+        exit;
+    }
+}
+
+function fecha_es(string $iso): string {
+    $meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    [$y, $mo, $d] = explode('-', $iso);
+    return (int)$d . ' de ' . $meses[(int)$mo - 1] . ' de ' . $y;
+}
+
 $c = $perfil['contacto'];
 $anio = date('Y');
+$base = $articulo ? '/' : '';
+$meta_titulo = $articulo ? $articulo['titulo'] . ' — ' . $perfil['nombre'] : $perfil['nombre'] . ' — Data Science & Machine Learning';
+$meta_desc   = $articulo ? $articulo['resumen'] : $perfil['nombre'] . ' · ' . $perfil['titulo'];
+$meta_img    = $articulo ? $articulo['imagen'] : $perfil['foto'];
 ?><!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= e($perfil['nombre']) ?> — Data Science & Machine Learning</title>
-<meta name="description" content="<?= e($perfil['nombre'] . ' · ' . $perfil['titulo']) ?>">
-<meta property="og:title" content="<?= e($perfil['nombre']) ?>">
-<meta property="og:description" content="<?= e($perfil['titulo']) ?>">
-<meta property="og:image" content="<?= e($perfil['foto']) ?>">
+<title><?= e($meta_titulo) ?></title>
+<meta name="description" content="<?= e($meta_desc) ?>">
+<meta property="og:title" content="<?= e($meta_titulo) ?>">
+<meta property="og:description" content="<?= e($meta_desc) ?>">
+<meta property="og:image" content="<?= e($meta_img) ?>">
+<meta property="og:type" content="<?= $articulo ? 'article' : 'website' ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -336,9 +582,48 @@ h2{font-size:clamp(28px,3.6vw,40px);margin:14px 0 16px}
 .post .cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,18,38,.1),rgba(7,18,38,.55))}
 .post:hover .cover img{transform:scale(1.05)}
 .post .soon{position:absolute;z-index:1;top:14px;right:14px;font-family:var(--font);font-size:11.5px;font-weight:600;letter-spacing:.04em;color:#fff;background:rgba(7,18,38,.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:99px}
-.post .body{padding:24px}
+.post{display:flex;flex-direction:column}
+.post:hover{transform:translateY(-4px)}
+.post .body{padding:24px;display:flex;flex-direction:column;flex:1}
 .post small{color:var(--blue);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
 .post h3{font-size:17px;margin-top:8px}
+.post p{font-size:14.5px;color:var(--muted);margin:10px 0 18px;flex:1}
+.post .read{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;color:var(--blue)}
+.post .read .ico{width:16px;height:16px;transition:transform .2s}
+.post:hover .read .ico{transform:translateX(4px)}
+
+/* Página de artículo */
+.narrow{max-width:760px}
+.article-head{background:var(--bg-soft);border-bottom:1px solid var(--line);padding:130px 0 48px}
+.back{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--muted);margin-bottom:28px}
+.back:hover{color:var(--blue)}
+.back .ico{width:16px;height:16px}
+.article-head h1{font-size:clamp(30px,4.4vw,44px);font-weight:800;margin:14px 0 16px}
+.dek{font-size:19px;color:var(--muted)}
+.byline{display:flex;align-items:center;gap:14px;margin-top:28px}
+.byline img{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 25%}
+.byline strong{display:block;color:var(--ink);font-size:15px}
+.byline span{font-size:13.5px;color:var(--muted)}
+.article-cover{margin:40px 0 8px;border-radius:var(--radius);overflow:hidden;aspect-ratio:16/9;box-shadow:var(--shadow)}
+.article-cover img{width:100%;height:100%;object-fit:cover}
+.prose{font-size:17.5px;line-height:1.8;color:var(--body);padding:24px 0 8px}
+.prose p{margin:0 0 22px}
+.prose h2{font-size:26px;margin:44px 0 16px}
+.prose strong{color:var(--ink)}
+.prose ul{margin:0 0 22px 22px;display:grid;gap:10px}
+.prose li::marker{color:var(--blue)}
+.prose code{font-family:var(--mono);font-size:.86em;background:#eff4ff;color:var(--blue-600);padding:2px 6px;border-radius:5px}
+.prose pre{background:var(--navy-950);color:#e2e8f0;border-radius:12px;padding:22px 24px;overflow-x:auto;margin:0 0 26px;font-size:14px;line-height:1.65;border:1px solid var(--navy-800)}
+.prose pre code{background:none;color:inherit;padding:0;font-size:inherit}
+.article-cta{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;background:var(--navy-950);color:#94a3b8;border-radius:var(--radius);padding:28px 30px;margin:32px 0 56px}
+.article-cta strong{display:block;color:#fff;font-family:var(--display);font-size:19px}
+.more-title{font-size:22px;margin-bottom:18px}
+.more{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:96px}
+.more-item{border:1px solid var(--line);border-radius:12px;padding:20px;transition:.2s}
+.more-item:hover{border-color:var(--blue);box-shadow:var(--shadow)}
+.more-item small{display:block;color:var(--blue);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.more-item strong{color:var(--ink);font-size:15.5px;line-height:1.4}
+@media (max-width:560px){.more{grid-template-columns:1fr}.prose{font-size:16.5px}.prose pre{font-size:13px;padding:18px}.article-head{padding-top:110px}}
 
 /* Contacto */
 .contact{background:var(--navy-950);color:#94a3b8;position:relative;overflow:hidden}
@@ -397,22 +682,53 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 </head>
 <body>
 
-<nav class="nav" id="nav">
+<nav class="nav<?= $articulo ? ' scrolled' : '' ?>" id="nav">
   <div class="wrap">
-    <a href="#inicio" class="brand"><img class="mark" src="<?= e($perfil['foto']) ?>" alt="" width="38" height="38"><?= e($perfil['nombre']) ?></a>
+    <a href="<?= $base ?>#inicio" class="brand"><img class="mark" src="<?= e($perfil['foto']) ?>" alt="" width="38" height="38"><?= e($perfil['nombre']) ?></a>
     <button class="burger" id="burger" aria-label="Abrir menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <ul class="menu" id="menu">
-      <li><a href="#sobre-mi">Sobre mí</a></li>
-      <li><a href="#servicios">Servicios</a></li>
-      <li><a href="#experiencia">Experiencia</a></li>
-      <li><a href="#proyectos">Proyectos</a></li>
-      <li><a href="#habilidades">Stack</a></li>
-      <li><a href="#educacion">Educación</a></li>
-      <li><a href="#blog">Blog</a></li>
-      <li><a href="#contacto" class="btn">Contacto</a></li>
+      <li><a href="<?= $base ?>#sobre-mi">Sobre mí</a></li>
+      <li><a href="<?= $base ?>#servicios">Servicios</a></li>
+      <li><a href="<?= $base ?>#experiencia">Experiencia</a></li>
+      <li><a href="<?= $base ?>#proyectos">Proyectos</a></li>
+      <li><a href="<?= $base ?>#habilidades">Stack</a></li>
+      <li><a href="<?= $base ?>#educacion">Educación</a></li>
+      <li><a href="<?= $base ?>#blog">Blog</a></li>
+      <li><a href="<?= $base ?>#contacto" class="btn">Contacto</a></li>
     </ul>
   </div>
 </nav>
+
+<?php if ($articulo): ?>
+<main class="article">
+  <header class="article-head">
+    <div class="wrap narrow">
+      <a href="/#blog" class="back"><span style="display:inline-flex;transform:rotate(180deg)"><?= icono('arrow') ?></span> Volver al blog</a>
+      <span class="eyebrow"><?= e($articulo['categoria']) ?></span>
+      <h1><?= e($articulo['titulo']) ?></h1>
+      <p class="dek"><?= e($articulo['resumen']) ?></p>
+      <div class="byline">
+        <img src="<?= e($perfil['foto']) ?>" alt="" width="44" height="44">
+        <div><strong><?= e($perfil['nombre']) ?></strong><span><?= fecha_es($articulo['fecha']) ?> · <?= $articulo['minutos'] ?> min de lectura</span></div>
+      </div>
+    </div>
+  </header>
+  <div class="wrap narrow">
+    <figure class="article-cover"><img src="<?= e($articulo['imagen']) ?>" alt=""></figure>
+    <div class="prose"><?= $articulo['cuerpo'] ?></div>
+    <div class="article-cta">
+      <div><strong>¿Te interesa este tema?</strong><span>Conversemos sobre cómo aplicarlo en tu equipo o proyecto.</span></div>
+      <a href="mailto:<?= e($c['email']) ?>" class="btn btn-primary"><?= icono('mail') ?> Escríbeme</a>
+    </div>
+    <h2 class="more-title">Otros artículos</h2>
+    <div class="more">
+      <?php foreach ($perfil['blog'] as $b): if ($b['slug'] === $articulo['slug']) continue; ?>
+        <a class="more-item" href="/blog/<?= e($b['slug']) ?>"><small><?= e($b['categoria']) ?></small><strong><?= e($b['titulo']) ?></strong></a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</main>
+<?php else: ?>
 
 <header class="hero" id="inicio">
   <div class="wrap">
@@ -582,14 +898,19 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     <div class="head reveal">
       <span class="eyebrow">Blog</span>
       <h2>Artículos y notas técnicas</h2>
-      <p class="lead">Pronto compartiré aprendizajes sobre ciencia de datos, MLOps e IA generativa.</p>
+      <p class="lead">Aprendizajes y notas prácticas sobre ciencia de datos, MLOps e IA generativa.</p>
     </div>
     <div class="posts">
-      <?php foreach ($perfil['blog'] as $i => $b): ?>
-        <article class="post reveal">
-          <div class="cover"><img src="<?= e($b['imagen']) ?>" alt="" loading="lazy"><span class="soon">Próximamente</span></div>
-          <div class="body"><small><?= e($b['categoria']) ?></small><h3><?= e($b['titulo']) ?></h3></div>
-        </article>
+      <?php foreach ($perfil['blog'] as $b): $a = $articulos[$b['slug']]; ?>
+        <a class="post reveal" href="/blog/<?= e($b['slug']) ?>">
+          <div class="cover"><img src="<?= e($b['imagen']) ?>" alt="" loading="lazy"><span class="soon"><?= $a['minutos'] ?> min de lectura</span></div>
+          <div class="body">
+            <small><?= e($b['categoria']) ?></small>
+            <h3><?= e($b['titulo']) ?></h3>
+            <p><?= e($b['resumen']) ?></p>
+            <span class="read">Leer artículo <?= icono('arrow') ?></span>
+          </div>
+        </a>
       <?php endforeach; ?>
     </div>
   </div>
@@ -612,6 +933,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <footer>
   <div class="wrap">
@@ -627,6 +949,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   const el = document.getElementById('typed');
   let r = 0, i = 0, borrando = false;
   const tick = () => {
+    if (!el) return;
     const txt = roles[r];
     i += borrando ? -1 : 1;
     el.textContent = txt.slice(0, i);
@@ -639,7 +962,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 
   // Menú fijo
   const nav = document.getElementById('nav');
-  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 20);
+  const fijo = <?= $articulo ? 'true' : 'false' ?>;
+  const onScroll = () => nav.classList.toggle('scrolled', fijo || window.scrollY > 20);
   window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   const menu = document.getElementById('menu');
