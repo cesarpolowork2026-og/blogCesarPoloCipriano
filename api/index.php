@@ -30,7 +30,7 @@ $perfil = [
         'Especialista en Microsoft Azure',
     ],
     'resumen'    => 'Estudiante de último ciclo de Ingeniería de Sistemas e Informática (X ciclo, egreso previsto en diciembre de 2026) con experiencia aplicada en ciencia de datos, MLOps y desarrollo full stack. Desarrollé de extremo a extremo un módulo de predicción de fuga de clientes bancarios con XGBoost, explicabilidad SHAP y reentrenamiento automático, y desplegué en Microsoft Azure soluciones de monitoreo de datos IoT.',
-    'tesis'      => 'Mi tesis aborda la robustez de sistemas RAG en español ante variaciones del lenguaje: informalidad, errores ortográficos y regionalismos.',
+    'tesis'      => 'Realicé una estancia de investigación en LLMs y NLP en el grupo PRHLT de la Universitat Politècnica de València (España), vinculada a mi tesis, que aborda la robustez de sistemas RAG en español ante variaciones del lenguaje: informalidad, errores ortográficos y regionalismos.',
     'contacto'   => [
         'email'    => 'polociprianouns@gmail.com',
         'telefono' => '+51 929 055 707',
@@ -50,6 +50,21 @@ $perfil = [
         ['icono' => 'chart', 'titulo' => 'Datos y BI', 'texto' => 'Procesos ETL, SQL Server y PostgreSQL, dashboards en Power BI e integración de datos IoT.'],
     ],
     'experiencia' => [
+        [
+            'cargo'   => 'Pasante de Investigación en NLP / LLMs',
+            'empresa' => 'Grupo PRHLT – Universitat Politècnica de València (UPV), España',
+            'periodo' => 'Oct. 2026 – Nov. 2026',
+            'logros'  => [
+                'Estancia de investigación internacional en el grupo PRHLT (Pattern Recognition and Human Language Technology) de la Universitat Politècnica de València, bajo la supervisión del Prof. Paolo Rosso, especialista en procesamiento de lenguaje natural.',
+                'Profundicé en modelos de lenguaje de gran escala (LLMs) y técnicas de procesamiento de lenguaje natural, trabajando con modelos en español como BETO y sus variantes.',
+                'Apliqué lo aprendido a mi tesis sobre la robustez de sistemas RAG ante variaciones del español: informalidad, errores ortográficos y regionalismos.',
+            ],
+            'stack'   => ['LLMs', 'NLP', 'BETO', 'Hugging Face Transformers', 'RAG'],
+            'fotos'   => [
+                ['src' => '/upv-campus.jpg',      'alt' => 'Campus de Vera de la Universitat Politècnica de València'],
+                ['src' => '/upv-laboratorio.jpg', 'alt' => 'Sesión de trabajo en un laboratorio de la UPV'],
+            ],
+        ],
         [
             'cargo'   => 'Desarrollador MLOps / Cloud',
             'empresa' => 'Freelance',
@@ -274,6 +289,11 @@ h2{font-size:clamp(28px,3.6vw,40px);margin:14px 0 16px}
 .job li{position:relative;padding-left:22px;font-size:15.5px}
 .job li::before{content:"";position:absolute;left:4px;top:.7em;width:7px;height:7px;border-radius:2px;background:var(--sky)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.gallery{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;margin-top:22px}
+.gallery figure{border-radius:10px;overflow:hidden;height:230px;border:1px solid var(--line)}
+.gallery img{width:100%;height:100%;object-fit:cover;transition:transform .5s}
+.gallery figure:hover img{transform:scale(1.04)}
+@media (max-width:560px){.gallery{grid-template-columns:1fr}.gallery figure{height:200px}}
 .chip{font-size:12.5px;font-weight:500;padding:5px 11px;border-radius:7px;background:var(--bg-soft);border:1px solid var(--line);color:var(--body)}
 
 /* Proyectos */
@@ -476,6 +496,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
             <div class="co"><?= e($x['empresa']) ?></div>
             <ul><?php foreach ($x['logros'] as $l): ?><li><?= e($l) ?></li><?php endforeach; ?></ul>
             <div class="chips"><?php foreach ($x['stack'] as $t): ?><span class="chip"><?= e($t) ?></span><?php endforeach; ?></div>
+            <?php if (!empty($x['fotos'])): ?>
+              <div class="gallery"><?php foreach ($x['fotos'] as $f): ?><figure><img src="<?= e($f['src']) ?>" alt="<?= e($f['alt']) ?>" loading="lazy"></figure><?php endforeach; ?></div>
+            <?php endif; ?>
           </div>
         </article>
       <?php endforeach; ?>
