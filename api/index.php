@@ -206,7 +206,7 @@ h2{font-size:clamp(28px,3.6vw,40px);margin:14px 0 16px}
 .nav.scrolled{background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-color:var(--line)}
 .nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px}
 .brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:800;color:#fff;font-size:17px}
-.brand .mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--accent));display:grid;place-items:center;font-size:14px;color:#fff}
+.brand .mark{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 25%;border:2px solid var(--sky);box-shadow:0 0 0 3px rgba(96,165,250,.2)}
 .nav.scrolled .brand{color:var(--ink)}
 .menu{display:flex;gap:4px;list-style:none;align-items:center}
 .menu a{padding:8px 12px;border-radius:8px;font-size:14.5px;font-weight:500;color:rgba(255,255,255,.8);transition:.2s}
@@ -389,7 +389,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 
 <nav class="nav" id="nav">
   <div class="wrap">
-    <a href="#inicio" class="brand"><span class="mark"><?= e($perfil['iniciales']) ?></span><?= e($perfil['nombre']) ?></a>
+    <a href="#inicio" class="brand"><img class="mark" src="<?= e($perfil['foto']) ?>" alt="" width="38" height="38"><?= e($perfil['nombre']) ?></a>
     <button class="burger" id="burger" aria-label="Abrir menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <ul class="menu" id="menu">
       <li><a href="#sobre-mi">Sobre mí</a></li>
