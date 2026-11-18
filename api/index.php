@@ -52,19 +52,6 @@ $perfil = [
     ],
     'experiencia' => [
         [
-            'cargo'   => 'Practicante de Ciencia de Datos',
-            'empresa' => 'NAAL Corporation S.A.C.',
-            'periodo' => 'Ene. 2026 – May. 2026',
-            'logros'  => [
-                'Desarrollé de extremo a extremo el módulo de predicción de fuga de clientes (churn) de BankMind, plataforma de IA para banca: modelo XGBoost entrenado con datos públicos de banca europea.',
-                'Implementé explicabilidad por cliente con SHAP, servida mediante una API en FastAPI e integrada con endpoints en Spring Boot, vistas en React + TypeScript y PostgreSQL.',
-                'Construí el ciclo MLOps: versionado de modelos en MLflow (DagsHub), reentrenamiento automático ante caída del recall, comparación champion/challenger y recarga del modelo sin detener el servicio.',
-                'Diseñé un simulador de campañas de retención con ROI proyectado y redacté el manual de usuario del módulo.',
-                'Reduje en 40% el tiempo de procesamiento de datos optimizando consultas en PostgreSQL.',
-            ],
-            'stack'   => ['XGBoost', 'SHAP', 'FastAPI', 'Spring Boot', 'React', 'MLflow', 'PostgreSQL'],
-        ],
-        [
             'cargo'   => 'Desarrollador MLOps / Cloud',
             'empresa' => 'Freelance',
             'periodo' => 'Ago. 2025 – Dic. 2025',
