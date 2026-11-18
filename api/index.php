@@ -23,7 +23,6 @@ $perfil = [
     'ubicacion'  => 'Chimbote, Perú',
     'foto'       => '/foto.jpg',
     'foto_alt'   => '/foto-workspace.jpg',
-    'cv'         => '/cv.pdf',
     'roles'      => [
         'Data Scientist',
         'Ingeniero MLOps',
@@ -399,8 +398,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
       <div class="role">Soy <span class="typed" id="typed"></span><span class="caret"></span></div>
       <p class="intro"><?= e($perfil['titulo']) ?>. Construyo soluciones de datos e inteligencia artificial de extremo a extremo: del modelo a producción.</p>
       <div class="ctas">
-        <a href="<?= e($perfil['cv']) ?>" download="CV_Cesar_Polo_Cipriano.pdf" class="btn btn-primary"><?= icono('download') ?> Descargar CV</a>
-        <a href="#contacto" class="btn btn-ghost">Hablemos <?= icono('arrow') ?></a>
+        <a href="#contacto" class="btn btn-primary">Hablemos <?= icono('arrow') ?></a>
+        <a href="#proyectos" class="btn btn-ghost">Ver proyectos</a>
       </div>
       <div class="meta">
         <span><?= icono('pin') ?> <?= e($perfil['ubicacion']) ?></span>
@@ -576,9 +575,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
       <h2>¿Construimos algo juntos?</h2>
       <p class="lead" style="color:#94a3b8">Abierto a oportunidades en ciencia de datos, Machine Learning, MLOps y desarrollo de software. Escríbeme y conversemos.</p>
       <div class="ctas" style="margin-top:30px;display:flex;gap:12px;flex-wrap:wrap">
-        <a href="mailto:<?= e($c['email']) ?>" class="btn btn-primary"><?= icono('mail') ?> Enviar correo</a>
-        <a href="<?= e($perfil['cv']) ?>" download="CV_Cesar_Polo_Cipriano.pdf" class="btn btn-ghost"><?= icono('download') ?> Descargar CV</a>
-      </div>
+        <a href="mailto:<?= e($c['email']) ?>" class="btn btn-primary"><?= icono('mail') ?> Enviar correo</a>      </div>
     </div>
     <div class="channels reveal">
       <a class="channel" href="mailto:<?= e($c['email']) ?>"><span class="ic"><?= icono('mail') ?></span><div><small>Correo</small><span><?= e($c['email']) ?></span></div><span class="arrow"><?= icono('arrow') ?></span></a>
