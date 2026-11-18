@@ -126,9 +126,10 @@ $perfil = [
         ['idioma' => 'Inglés',  'nivel' => 'Intermedio', 'pct' => 60],
     ],
     'blog' => [
-        ['titulo' => 'Del notebook a producción: MLOps con MLflow y reentrenamiento automático', 'categoria' => 'MLOps'],
-        ['titulo' => 'Explicar un modelo de churn con SHAP para equipos de negocio',              'categoria' => 'Machine Learning'],
-        ['titulo' => '¿Qué tan robusto es un sistema RAG frente al español informal?',            'categoria' => 'NLP / LLMs'],
+        // Imágenes referenciales de Unsplash (licencia libre), guardadas en public/
+        ['titulo' => 'Del notebook a producción: MLOps con MLflow y reentrenamiento automático', 'categoria' => 'MLOps',            'imagen' => '/blog-mlops.jpg'],
+        ['titulo' => 'Explicar un modelo de churn con SHAP para equipos de negocio',              'categoria' => 'Machine Learning', 'imagen' => '/blog-shap.jpg'],
+        ['titulo' => '¿Qué tan robusto es un sistema RAG frente al español informal?',            'categoria' => 'NLP / LLMs',       'imagen' => '/blog-rag.jpg'],
     ],
 ];
 
@@ -330,8 +331,11 @@ h2{font-size:clamp(28px,3.6vw,40px);margin:14px 0 16px}
 .posts{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
 .post{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff;transition:.25s}
 .post:hover{box-shadow:var(--shadow)}
-.post .cover{height:150px;background:linear-gradient(135deg,var(--navy-900),var(--navy-700));position:relative;display:grid;place-items:center;color:rgba(255,255,255,.14);font-family:var(--mono);font-size:44px}
-.post .soon{position:absolute;top:14px;right:14px;font-family:var(--font);font-size:11.5px;font-weight:600;letter-spacing:.04em;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);padding:4px 10px;border-radius:99px}
+.post .cover{height:180px;background:var(--navy-900);position:relative;overflow:hidden}
+.post .cover img{width:100%;height:100%;object-fit:cover;transition:transform .5s}
+.post .cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,18,38,.1),rgba(7,18,38,.55))}
+.post:hover .cover img{transform:scale(1.05)}
+.post .soon{position:absolute;z-index:1;top:14px;right:14px;font-family:var(--font);font-size:11.5px;font-weight:600;letter-spacing:.04em;color:#fff;background:rgba(7,18,38,.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:99px}
 .post .body{padding:24px}
 .post small{color:var(--blue);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
 .post h3{font-size:17px;margin-top:8px}
@@ -583,7 +587,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     <div class="posts">
       <?php foreach ($perfil['blog'] as $i => $b): ?>
         <article class="post reveal">
-          <div class="cover"><?= ['{ }', '&lt;/&gt;', 'f(x)'][$i % 3] ?><span class="soon">Próximamente</span></div>
+          <div class="cover"><img src="<?= e($b['imagen']) ?>" alt="" loading="lazy"><span class="soon">Próximamente</span></div>
           <div class="body"><small><?= e($b['categoria']) ?></small><h3><?= e($b['titulo']) ?></h3></div>
         </article>
       <?php endforeach; ?>
